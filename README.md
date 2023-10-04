@@ -1,7 +1,7 @@
 audfprint-enhanched
 =========
 
-This fork includes HDF support. And some minor code speedup improvements.
+This fork includes HDF support. And some code speedup.
 
 Before:
 
