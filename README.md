@@ -1,4 +1,4 @@
-audfprint-enhanched
+audfprint-enhanced
 =========
 
 This fork includes HDF support. And some code speedup.
