@@ -11,6 +11,8 @@ After:
 
 ![After](Figure_2.png)
 
+And the fingerprint database file has been downsized from 405MB to 6MB!
+
 These measurements were taken by [memory_profiler](https://github.com/pythonprofilers/memory_profiler)
 
 ---
