@@ -1,5 +1,19 @@
-audfprint
+audfprint-enhanched
 =========
+
+This fork includes HDF support. And some minor code speedup improvements.
+
+Before:
+
+![Before](Figure_1.png)
+
+After:
+
+![After](Figure_2.png)
+
+These measurements were taken by [memory_profiler](https://github.com/pythonprofilers/memory_profiler)
+
+---
 
 Landmark-based audio fingerprinting.
 

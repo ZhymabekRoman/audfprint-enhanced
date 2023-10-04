@@ -3,3 +3,4 @@ scipy
 docopt
 joblib
 psutil
+h5py==3.9.0
