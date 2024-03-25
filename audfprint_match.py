@@ -405,16 +405,16 @@ class Matcher(object):
                         msg = ("Matched {:6.1f} s starting at {:6.1f} s in {:s}"
                                " to time {:6.1f} s in {:s}").format(
                                 (max_time - min_time) * t_hop, min_time * t_hop, qry,
-                                (min_time + aligntime) * t_hop, ht.names[tophitid])
+                                (min_time + aligntime) * t_hop, str(ht.names[tophitid]))
                     else:
                         msg = "Matched {:s} as {:s} at {:6.1f} s".format(
-                                qrymsg, ht.names[tophitid], aligntime * t_hop)
+                                qrymsg, str(ht.names[tophitid]), aligntime * t_hop)
                     msg += (" with {:5d} of {:5d} common hashes"
                             " at rank {:2d}").format(
                             nhashaligned, nhashraw, rank)
                     msgrslt.append(msg)
                 else:
-                    msgrslt.append(qrymsg + "\t" + ht.names[tophitid])
+                    msgrslt.append(qrymsg + "\t" + ht.names[tophitid][:])
                 if self.illustrate:
                     self.illustrate_match(analyzer, ht, qry)
         return msgrslt

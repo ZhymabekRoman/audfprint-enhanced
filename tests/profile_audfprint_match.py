@@ -5,7 +5,7 @@ import pstats
 # noinspection PyUnresolvedReferences
 import audfprint
 
-argv = ["audfprint", "match", "-d", "fpdbase.pklz", "--density", "200", "query.mp3"]
+argv = ["audfprint", "match", "-d", "tmp.fpdb.hdf", "data/query.mp3"]
 
 cProfile.run('audfprint.main(argv)', 'fpmstats')
 

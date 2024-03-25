@@ -12,22 +12,25 @@ from __future__ import division, print_function
 import gzip
 import math
 import os
+# import zlib
+import gzip as zlib
+from enum import Enum
+import json
+import h5py
 import random
 import sys
 
 import numpy as np
 import scipy.io
 
-if sys.version_info[0] >= 3:
-    # Python 3 specific definitions
-    import pickle  # Py3
-    basestring = (str, bytes)  # Py3
-    pickle_options = {'encoding': 'latin1'}
-else:
-    # Python 2 specific definitions
-    import cPickle as pickle  # Py2
-    pickle_options = {}
+import pickle
+basestring = (str, bytes)
+pickle_options = {'encoding': 'latin1'}
 
+class DatabaseType(Enum):
+    PKL = "PKL"
+    HDF = "HDF"
+    MAT = "MAT"
 
 # Current format version
 HT_VERSION = 20170724
@@ -55,6 +58,7 @@ class HashTable(object):
        >>> ht.store('identifier', list_of_landmark_time_hash_pairs)
        >>> list_of_ids_tracks = ht.get_hits(hash)
     """
+    __slots__ = ("hashbits", "depth", "maxtimebits", "table" , "counts", "names", "hashesperid", "params", "ht_version", "dirty")
 
     def __init__(self, filename=None, hashbits=20, depth=100, maxtime=16384):
         """ allocate an empty hash table of the specified size """
@@ -172,10 +176,37 @@ class HashTable(object):
             hits[hitrows, 3] = time_
             nhits += nids
         # Discard the excess rows
-        hits.resize((nhits, 4))
+        hits.resize((nhits, 4), refcheck=False)
         return hits
 
-    def save(self, name, params=None, file_object=None):
+    def save(self, name, params=None, file_object=None, save_type=None):
+        if not save_type:
+            save_type = DatabaseType.HDF
+        
+        if save_type == DatabaseType.HDF or save_type == DatabaseType.HDF.value:
+            if not os.path.splitext(name)[1] or os.path.splitext(name)[1] != ".hdf":
+                name = f"{name}.hdf"
+
+            save_result = self.save_hdf(name)
+        elif save_type == DatabaseType.PKL or save_type == DatabaseType.PKL.value:
+            if not os.path.splitext(name)[1] or os.path.splitext(name)[1] != ".pkl":
+                name = f"{name}.pkl"
+
+            save_result = self.save_pkl(name)
+        else:
+            raise ValueError(f"Unknown database type or doesn't support to export: {save_type}")
+
+        self.dirty = False
+        nhashes = sum(self.counts)
+        # Report the proportion of dropped hashes (overfull table)
+        dropped = nhashes - sum(np.minimum(self.depth, self.counts))
+        print("Saved fprints for", sum(n is not None for n in self.names),
+              "files (", nhashes, "hashes) to", name,
+              "(%.2f%% dropped)" % (100.0 * dropped / max(1, nhashes)))
+
+        return name
+
+    def save_pkl(self, name, params=None, file_object=None):
         """ Save hash table to file <name>,
             including optional addition params
         """
@@ -186,23 +217,52 @@ class HashTable(object):
         if file_object:
             f = file_object
         else:
-            f = gzip.open(name, 'wb')
+            f = zlib.open(name, 'wb')
+
         pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
-        self.dirty = False
-        nhashes = sum(self.counts)
-        # Report the proportion of dropped hashes (overfull table)
-        dropped = nhashes - sum(np.minimum(self.depth, self.counts))
-        print("Saved fprints for", sum(n is not None for n in self.names),
-              "files (", nhashes, "hashes) to", name,
-              "(%.2f%% dropped)" % (100.0 * dropped / max(1, nhashes)))
+        
+
+    def save_hdf(self, name, params=None, file_object=None):
+        """ Save hash table to file <name>,
+            including optional additional params
+        """
+        # Merge in any provided params
+        if params:
+            for key in params:
+                self.params[key] = params[key]
+
+        if file_object:
+            f = file_object
+        else:
+            f = name
+
+        temp = h5py.File(f, 'w')
+
+        temp.attrs['params'] = json.dumps(self.params)
+        temp.attrs['hashbits'] = self.hashbits
+        temp.attrs['depth'] = self.depth
+        temp.attrs['maxtimebits'] = self.maxtimebits
+
+        temp.create_dataset('table', data=self.table, compression="gzip", compression_opts=1)
+        temp.create_dataset('counts', data=self.counts)
+        temp.create_dataset('names', data=self.names)
+        temp.create_dataset('hashesperid', data=self.hashesperid)
+        
+        # temp.close()
 
     def load(self, name):
         """ Read either pklz or mat-format hash table file """
         ext = os.path.splitext(name)[1]
         if ext == '.mat':
             self.load_matlab(name)
-        else:
+        elif ext == '.hdf':
+            self.load_hdf(name)
+        elif ext == '.pkl':
             self.load_pkl(name)
+        else:
+            print("File type is not specified. Using as HDF")
+            self.load_hdf(name)
+
         nhashes = sum(self.counts)
         # Report the proportion of dropped hashes (overfull table)
         dropped = nhashes - sum(np.minimum(self.depth, self.counts))
@@ -210,19 +270,53 @@ class HashTable(object):
               "files (", nhashes, "hashes) from", name,
               "(%.2f%% dropped)" % (100.0 * dropped / max(1, nhashes)))
 
+    def load_hdf(self, name, file_object=None):
+        """ Read hash table values from pickle file <name>. """
+        if file_object:
+            f = file_object
+        else:
+            f = name
+
+        temp = h5py.File(f, 'r')
+
+        # if temp.ht_version < HT_OLD_COMPAT_VERSION:
+        #     raise ValueError('Version of ' + name + ' is ' + str(temp.ht_version)
+        #                      + ' which is not at least ' +
+        #                      str(HT_OLD_COMPAT_VERSION))
+
+        # assert temp.ht_version >= HT_COMPAT_VERSION
+        
+        self.hashbits = temp.attrs['hashbits']
+        self.depth = temp.attrs['depth']
+        
+        if "maxtimebits" in temp.attrs:
+            self.maxtimebits = temp.attrs['maxtimebits']
+        else:
+            raise ValueError("'maxtimebits' not found!")
+            # self.maxtimebits = _bitsfor(temp.maxtime)
+
+        self.table = temp['table']
+        
+        self.counts = temp['counts'][:]
+        self.names = temp['names'][:]
+        self.hashesperid = np.array(temp['hashesperid'][...]).astype(np.uint32)
+        self.dirty = False
+        self.params = json.loads(temp.attrs['params'])
+
+        # self.ht_version = temp.ht_version
+
     def load_pkl(self, name, file_object=None):
         """ Read hash table values from pickle file <name>. """
         if file_object:
             f = file_object
         else:
-            f = gzip.open(name, 'rb')
+            f = zlib.open(name, 'rb')
         temp = pickle.load(f, **pickle_options)
         if temp.ht_version < HT_OLD_COMPAT_VERSION:
             raise ValueError('Version of ' + name + ' is ' + str(temp.ht_version)
                              + ' which is not at least ' +
                              str(HT_OLD_COMPAT_VERSION))
         # assert temp.ht_version >= HT_COMPAT_VERSION
-        params = temp.params
         self.hashbits = temp.hashbits
         self.depth = temp.depth
         if hasattr(temp, 'maxtimebits'):
@@ -237,13 +331,14 @@ class HashTable(object):
             temp.table += np.array(1 << self.maxtimebits).astype(np.uint32) * (
                     temp.table != 0)
             temp.ht_version = HT_VERSION
+
         self.table = temp.table
         self.ht_version = temp.ht_version
         self.counts = temp.counts
         self.names = temp.names
         self.hashesperid = np.array(temp.hashesperid).astype(np.uint32)
         self.dirty = False
-        self.params = params
+        self.params = temp.params
 
     def load_matlab(self, name):
         """ Read hash table from version saved by Matlab audfprint.
