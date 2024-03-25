@@ -298,7 +298,7 @@ class HashTable(object):
         self.table = temp['table']
         
         self.counts = temp['counts'][:]
-        self.names = temp['names'][:]
+        self.names = list(temp['names'])
         self.hashesperid = np.array(temp['hashesperid'][...]).astype(np.uint32)
         self.dirty = False
         self.params = json.loads(temp.attrs['params'])
