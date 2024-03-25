@@ -295,10 +295,10 @@ class HashTable(object):
             raise ValueError("'maxtimebits' not found!")
             # self.maxtimebits = _bitsfor(temp.maxtime)
 
-        self.table = temp['table']
+        self.table = temp['table'][:]
         
         self.counts = temp['counts'][:]
-        self.names = list(temp['names'])
+        self.names = list(temp['names'].asstr())
         self.hashesperid = np.array(temp['hashesperid'][...]).astype(np.uint32)
         self.dirty = False
         self.params = json.loads(temp.attrs['params'])
