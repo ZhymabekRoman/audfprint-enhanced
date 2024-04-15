@@ -13,6 +13,7 @@ from __future__ import division, print_function
 # For reporting progress time
 import time
 # For command line interface
+import click
 import docopt
 import os
 # For __main__
@@ -271,50 +272,47 @@ def do_cmd_multiproc(cmd, analyzer, hash_tab, filename_iter, matcher,
 
 
 # Command to separate out setting of analyzer parameters
-def setup_analyzer(args):
+def setup_analyzer(density, is_match, pks_per_frame, fanout, freq_sd, shifts, samplerate, continue_on_error):
     """Create a new analyzer object, taking values from docopts args"""
     # Create analyzer object; parameters will get set below
     analyzer = audfprint_analyze.Analyzer()
     # Read parameters from command line/docopts
-    analyzer.density = float(args['--density'])
-    analyzer.maxpksperframe = int(args['--pks-per-frame'])
-    analyzer.maxpairsperpeak = int(args['--fanout'])
-    analyzer.f_sd = float(args['--freq-sd'])
-    analyzer.shifts = int(args['--shifts'])
+    analyzer.density = float(density)
+    analyzer.maxpksperframe = int(pks_per_frame)
+    analyzer.maxpairsperpeak = int(fanout)
+    analyzer.f_sd = float(freq_sd)
+    analyzer.shifts = int(shifts)
     # fixed - 512 pt FFT with 256 pt hop at 11025 Hz
-    analyzer.target_sr = int(args['--samplerate'])
+    analyzer.target_sr = int(samplerate)
     analyzer.n_fft = 512
     analyzer.n_hop = analyzer.n_fft // 2
     # set default value for shifts depending on mode
     if analyzer.shifts == 0:
         # Default shift is 4 for match, otherwise 1
-        analyzer.shifts = 4 if args['match'] else 1
-    analyzer.fail_on_error = not args['--continue-on-error']
+        analyzer.shifts = 4 if is_match else 1
+    analyzer.fail_on_error = not continue_on_error
     return analyzer
 
 
-# Command to separate out setting of matcher parameters
-def setup_matcher(args):
+def setup_matcher(match_win, search_depth, min_count, max_matches, exact_count, find_time_range, time_quantile, sortbytime, illustrate, illustrate_hpf, verbose):
     """Create a new matcher objects, set parameters from docopt structure"""
     matcher = audfprint_match.Matcher()
-    matcher.window = int(args['--match-win'])
-    matcher.threshcount = int(args['--min-count'])
-    matcher.max_returns = int(args['--max-matches'])
-    matcher.search_depth = int(args['--search-depth'])
-    matcher.sort_by_time = args['--sortbytime']
-    matcher.exact_count = args['--exact-count'] | args['--illustrate'] | args['--illustrate-hpf']
-    matcher.illustrate = args['--illustrate'] | args['--illustrate-hpf']
-    matcher.illustrate_hpf = args['--illustrate-hpf']
-    matcher.verbose = args['--verbose']
-    matcher.find_time_range = args['--find-time-range']
-    matcher.time_quantile = float(args['--time-quantile'])
+    matcher.window = int(match_win)
+    matcher.threshcount = int(min_count)
+    matcher.max_returns = int(max_matches)
+    matcher.search_depth = int(search_depth)
+    matcher.sort_by_time = sortbytime
+    matcher.exact_count = exact_count | illustrate | illustrate_hpf
+    matcher.illustrate = illustrate | illustrate_hpf
+    matcher.illustrate_hpf = illustrate_hpf
+    matcher.verbose = verbose
+    matcher.find_time_range = find_time_range
+    matcher.time_quantile = float(time_quantile)
     return matcher
 
 
-# Command to construct the reporter object
-def setup_reporter(args):
+def setup_reporter(opfile):
     """ Creates a logging function, either to stderr or file"""
-    opfile = args['--opfile']
     if opfile and len(opfile):
         f = open(opfile, "w")
 
@@ -383,102 +381,111 @@ Options:
 __version__ = 20150406
 
 
-def main(argv):
-    """ Main routine for the command-line interface to audfprint """
-    # Other globals set from command line
-    args = docopt.docopt(USAGE, version=__version__, argv=argv[1:])
-
-    # Figure which command was chosen
-    poss_cmds = ['new', 'add', 'precompute', 'merge', 'newmerge', 'match',
-                 'list', 'remove']
-    cmdlist = [cmdname
-               for cmdname in poss_cmds
-               if args[cmdname]]
-    if len(cmdlist) != 1:
-        raise ValueError("must specify exactly one command")
-    # The actual command as a str
-    cmd = cmdlist[0]
-
+@click.command(help="Landmark-based audio fingerprinting. Create a new fingerprint dbase with 'new', append new files to an existing database with 'add', or identify noisy query excerpts with 'match'. 'precompute' writes a *.fpt file under precompdir with precomputed fingerprint for each input wav file. 'merge' combines previously-created databases into an existing database; 'newmerge' combines existing databases to create a new one.", context_settings={'show_default': True})
+@click.argument('cmd', type=click.Choice(['new', 'add', 'precompute', 'merge', 'newmerge', 'match', 'list', 'remove']))
+@click.option('-d', '--dbase', help='Fingerprint database file')
+@click.option('-n', '--density', default=20.0, help='Target hashes per second')
+@click.option('-h', '--hashbits', default=20, help='How many bits in each hash')
+@click.option('-b', '--bucketsize', default=100, help='Number of entries per bucket')
+@click.option('-t', '--maxtime', default=16384, help='Largest time value stored')
+@click.option('-u', '--maxtimebits', help='maxtime as a number of bits (16384 == 14 bits)')
+@click.option('-r', '--samplerate', default=11025, help='Resample input files to this')
+@click.option('-p', '--precompdir', default='.', help='Save precomputed files under this dir')
+@click.option('-i', '--shifts', default=0, help='Use this many subframe shifts building fp')
+@click.option('-w', '--match-win', default=2, help='Maximum tolerable frame skew to count as a match')
+@click.option('-N', '--min-count', default=5, help='Minimum number of matching landmarks to count as a match')
+@click.option('-x', '--max-matches', default=1, help='Maximum number of matches to report for each query')
+@click.option('-X', '--exact-count', is_flag=True, help='Flag to use more precise (but slower) match counting')
+@click.option('-R', '--find-time-range', is_flag=True, help='Report the time support of each match')
+@click.option('-Q', '--time-quantile', default=0.05, help='Quantile at extremes of time support')
+@click.option('-S', '--freq-sd', default=30.0, help='Frequency peak spreading SD in bins')
+@click.option('-F', '--fanout', default=3, help='Max number of hash pairs per peak')
+@click.option('-P', '--pks-per-frame', default=5, help='Maximum number of peaks per frame')
+@click.option('-D', '--search-depth', default=100, help='How far down to search raw matching track list')
+@click.option('-H', '--ncores', default=1, help='Number of processes to use')
+@click.option('-o', '--opfile', default='', help='Write output (matches) to this file, not stdout')
+@click.option('-K', '--precompute-peaks', is_flag=True, help='Precompute just landmarks (else full hashes)')
+@click.option('-k', '--skip-existing', is_flag=True, help='On precompute, skip items if output file already exists')
+@click.option('-C', '--continue-on-error', is_flag=True, help='Keep processing despite errors reading input')
+@click.option('-l', '--list', is_flag=True, help='Input files are lists, not audio')
+@click.option('-T', '--sortbytime', is_flag=True, help='Sort multiple hits per file by time (instead of score)')
+@click.option('-v', '--verbose', default=1, help='Verbosity level')
+@click.option('-I', '--illustrate', is_flag=True, help='Make a plot showing the match')
+@click.option('-J', '--illustrate-hpf', is_flag=True, help='Plot the match, using onset enhancement')
+@click.option('-W', '--wavdir', default='', help='Find sound files under this dir')
+@click.option('-V', '--wavext', default='', help='Extension to add to wav file names')
+@click.version_option(version=__version__, prog_name='audfprint-enhanced')
+@click.argument('file', nargs=-1)
+def main(cmd, dbase, density, hashbits, bucketsize, maxtime, maxtimebits, samplerate, precompdir, shifts, match_win, min_count, max_matches, exact_count, find_time_range, time_quantile, freq_sd, fanout, pks_per_frame, search_depth, ncores, opfile, precompute_peaks, skip_existing, continue_on_error, list, sortbytime, verbose, illustrate, illustrate_hpf, wavdir, wavext, file):
     # Setup output function
-    report = setup_reporter(args)
+    report = setup_reporter(opfile)
 
     # Keep track of wall time
     initticks = time_clock()
 
-    # Command line sanity.
-    if args["--maxtimebits"]:
-        args["--maxtimebits"] = int(args["--maxtimebits"])
-    else:
-        args["--maxtimebits"] = hash_table._bitsfor(int(args["--maxtime"]))
+    if not maxtimebits:
+        maxtimebits = hash_table._bitsfor(maxtime)
 
     # Setup the analyzer if we're using one (i.e., unless "merge")
-    analyzer = setup_analyzer(args) if not (
-            cmd == "merge" or cmd == "newmerge"
-            or cmd == "list" or cmd == "remove") else None
+    analyzer = setup_analyzer(density, cmd == "match", pks_per_frame, fanout, freq_sd, shifts, samplerate, continue_on_error) if cmd not in ["merge", "newmerge", "list", "remove"] else None
 
-    precomp_type = 'hashes'
+    precomp_type = 'hashes' if not precompute_peaks else 'peaks'
 
     # Set up the hash table, if we're using one (i.e., unless "precompute")
     if cmd != "precompute":
         # For everything other than precompute, we need a database name
         # Check we have one
-        dbasename = args['--dbase']
-        if not dbasename:
+        if not dbase:
             raise ValueError("dbase name must be provided if not precompute")
-        if cmd == "new" or cmd == "newmerge":
+        if cmd in ["new", "newmerge"]:
             # Check that the output directory can be created before we start
-            ensure_dir(os.path.split(dbasename)[0])
+            ensure_dir(os.path.split(dbase)[0])
             # Create a new hash table
             hash_tab = hash_table.HashTable(
-                    hashbits=int(args['--hashbits']),
-                    depth=int(args['--bucketsize']),
-                    maxtime=(1 << int(args['--maxtimebits'])))
+                    hashbits=hashbits,
+                    depth=bucketsize,
+                    maxtime=(1 << maxtimebits))
             # Set its samplerate param
             if analyzer:
                 hash_tab.params['samplerate'] = analyzer.target_sr
 
         else:
             # Load existing hash table file (add, match, merge)
-            if args['--verbose']:
-                report([time.ctime() + " Reading hash table " + dbasename])
-            hash_tab = hash_table.HashTable(dbasename)
+            if verbose:
+                report([time.ctime() + " Reading hash table " + dbase])
+            hash_tab = hash_table.HashTable(dbase)
             if analyzer and 'samplerate' in hash_tab.params \
                     and hash_tab.params['samplerate'] != analyzer.target_sr:
-                # analyzer.target_sr = hash_tab.params['samplerate']
                 print("db samplerate overridden to ", analyzer.target_sr)
     else:
         # The command IS precompute
         # dummy empty hash table
         hash_tab = None
-        if args['--precompute-peaks']:
-            precomp_type = 'peaks'
 
     # Create a matcher
-    matcher = setup_matcher(args) if cmd == 'match' else None
+    matcher = setup_matcher(match_win, search_depth, min_count, max_matches, exact_count, find_time_range, time_quantile, sortbytime, illustrate, illustrate_hpf, verbose) if cmd == 'match' else None
 
     filename_iter = filename_list_iterator(
-            args['<file>'], args['--wavdir'], args['--wavext'], args['--list'])
+            file, wavdir, wavext, list)
 
     #######################
     # Run the main commmand
     #######################
 
     # How many processors to use (multiprocessing)
-    ncores = int(args['--ncores'])
-    if ncores > 1 and not (cmd == "merge" or cmd == "newmerge" or
-                           cmd == "list" or cmd == "remove"):
+    if ncores > 1 and cmd not in ["merge", "newmerge", "list", "remove"]:
         # merge/newmerge/list/remove are always single-thread processes
         do_cmd_multiproc(cmd, analyzer, hash_tab, filename_iter,
-                         matcher, args['--precompdir'],
+                         matcher, precompdir,
                          precomp_type, report,
-                         skip_existing=args['--skip-existing'],
-                         strip_prefix=args['--wavdir'],
+                         skip_existing=skip_existing,
+                         strip_prefix=wavdir,
                          ncores=ncores)
     else:
         do_cmd(cmd, analyzer, hash_tab, filename_iter,
-               matcher, args['--precompdir'], precomp_type, report,
-               skip_existing=args['--skip-existing'],
-               strip_prefix=args['--wavdir'])
+               matcher, precompdir, precomp_type, report,
+               skip_existing=skip_existing,
+               strip_prefix=wavdir)
 
     elapsedtime = time_clock() - initticks
     if analyzer and analyzer.soundfiletotaldur > 0.:
@@ -490,9 +497,8 @@ def main(argv):
     # Save the hash table file if it has been modified
     if hash_tab and hash_tab.dirty:
         # We already created the directory, if "new".
-        hash_tab.save(dbasename)
+        hash_tab.save(dbase)
 
 
-# Run the main function if called from the command line
-if __name__ == "__main__":
-    main(sys.argv)
+if __name__ == '__main__':
+    main()

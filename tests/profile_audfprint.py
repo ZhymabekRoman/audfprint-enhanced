@@ -5,7 +5,7 @@ import pstats
 # noinspection PyUnresolvedReferences
 import audfprint
 
-argv = ["audfprint", "new", "-d", "tmp.fpdb.hdf",
+argv = ["new", "-d", "tmp.fpdb.hdf",
         "data/Nine_Lives/01-Nine_Lives.mp3",
         "data/Nine_Lives/02-Falling_In_Love.mp3",
         "data/Nine_Lives/03-Hole_In_My_Soul.mp3",
