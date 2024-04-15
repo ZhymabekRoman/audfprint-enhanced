@@ -75,7 +75,7 @@ print(sys.argv[0], "density:", density, "fanout:", fanout,
 audfprint.ensure_dir(dir4db)
 
 # Run the command
-argv = ["audfprint", "new",
+argv = ["new",
         "-d", os.path.join(dir4db, "data.fpdb"),
         "--density", str(density),
         "--fanout", str(fanout),

@@ -26,7 +26,7 @@
 # ./AFP/query/q000002.wav	./AFP/database/0000054.mp3
 # ./AFP/query/q000003.wav	./AFP/database/0001002.mp3
 # ..
-from __future__ import print_function
+from loguru import logger
 
 import os
 import sys
@@ -79,12 +79,12 @@ search_depth = config.getint(section, 'search_depth')
 min_count = config.getint(section, 'min_count')
 ncores = config.getint(section, 'ncores')
 
-print(sys.argv[0], "density:", density, "fanout:", fanout,
+logger.debug(sys.argv[0], "density:", density, "fanout:", fanout,
       "search_depth", search_depth, "min_count", min_count,
       "ncores:", ncores)
 
 # Run the command
-argv = ["audfprint", "match",
+argv = ["match",
         "-d", os.path.join(dir4db, "data.fpdb"),
         "--density", str(density),
         "--fanout", str(fanout),

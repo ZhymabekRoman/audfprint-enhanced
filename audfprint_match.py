@@ -6,7 +6,8 @@ Fingerprint matching code for audfprint
 
 2014-05-26 Dan Ellis dpwe@ee.columbia.edu
 """
-from __future__ import division, print_function
+from loguru import logger
+
 import os
 import time
 
@@ -40,7 +41,7 @@ def process_info():
 
 def log(message):
     """ log info with stats """
-    print('%s physmem=%s utime=%s %s' % (time.ctime(), process_info()))
+    logger.debug('%s physmem=%s utime=%s %s' % (time.ctime(), process_info()))
 
 
 def encpowerof2(val):
@@ -105,8 +106,6 @@ class Matcher(object):
         self.search_depth = 100
         # Sort those returns by time (instead of counts)?
         self.sort_by_time = False
-        # Verbose reporting?
-        self.verbose = False
         # Do illustration?
         self.illustrate = False
         # Careful counts?
@@ -363,14 +362,15 @@ class Matcher(object):
             durd = 0.0
         else:
             durd = analyzer.n_hop * q_hashes[-1][0] / analyzer.target_sr
-        if self.verbose:
-            if number is not None:
-                numberstring = "#%d" % number
-            else:
-                numberstring = ""
-            print(time.ctime(), "Analyzed", numberstring, filename, "of",
-                  ('%.3f' % durd), "s "
-                                   "to", len(q_hashes), "hashes")
+
+        if number is not None:
+            numberstring = "#%d" % number
+        else:
+            numberstring = ""
+        logger.trace(time.ctime(), "Analyzed", numberstring, filename, "of",
+              ('%.3f' % durd), "s "
+                               "to", len(q_hashes), "hashes")
+
         # Run query
         rslts = self.match_hashes(ht, q_hashes)
         # Post filtering
@@ -381,10 +381,12 @@ class Matcher(object):
     def file_match_to_msgs(self, analyzer, ht, qry, number=None):
         """ Perform a match on a single input file, return list
             of message strings """
+        current_log_level = logger._core.min_level
+
         rslts, dur, nhash = self.match_file(analyzer, ht, qry, number)
         t_hop = analyzer.n_hop / analyzer.target_sr
-        if self.verbose:
-            qrymsg = qry + (' %.1f ' % dur) + "sec " + str(nhash) + " raw hashes"
+        if current_log_level < 5: # if current level is TRACE or more
+            qrymsg = f"{qry} {dur:.1f} sec {nhash} raw hashes"
         else:
             qrymsg = qry
 
@@ -392,29 +394,21 @@ class Matcher(object):
         if len(rslts) == 0:
             # No matches returned at all
             nhashaligned = 0
-            if self.verbose:
-                msgrslt.append("NOMATCH " + qrymsg)
-            else:
-                msgrslt.append(qrymsg + "\t")
+            msgrslt.append(f"NOMATCH: {qrymsg}")
         else:
             for (tophitid, nhashaligned, aligntime, nhashraw, rank,
                  min_time, max_time) in rslts:
                 # figure the number of raw and aligned matches for top hit
-                if self.verbose:
+                if current_log_level < 5: # if current level is TRACE or more
                     if self.find_time_range:
-                        msg = ("Matched {:6.1f} s starting at {:6.1f} s in {:s}"
-                               " to time {:6.1f} s in {:s}").format(
-                                (max_time - min_time) * t_hop, min_time * t_hop, qry,
-                                (min_time + aligntime) * t_hop, str(ht.names[tophitid]))
+                        msg = (f"Matched {(max_time - min_time) * t_hop:6.1f} s starting at {min_time * t_hop:6.1f} s in {qry}"
+                               f" to time {(min_time + aligntime) * t_hop:6.1f} s in {str(ht.names[tophitid])}")
                     else:
-                        msg = "Matched {:s} as {:s} at {:6.1f} s".format(
-                                qrymsg, str(ht.names[tophitid]), aligntime * t_hop)
-                    msg += (" with {:5d} of {:5d} common hashes"
-                            " at rank {:2d}").format(
-                            nhashaligned, nhashraw, rank)
+                        msg = f"Matched {qrymsg} as {str(ht.names[tophitid])} at {aligntime * t_hop:6.1f} s"
+                    msg += f" with {nhashaligned:5d} of {nhashraw:5d} common hashes at rank {rank:2d}"
                     msgrslt.append(msg)
                 else:
-                    msgrslt.append(qrymsg + "\t" + ht.names[tophitid][:])
+                    msgrslt.append(f"{qrymsg}\t{ht.names[tophitid][:]}")
                 if self.illustrate:
                     self.illustrate_match(analyzer, ht, qry)
         return msgrslt
@@ -479,10 +473,7 @@ def localtest():
     rslts, dur, nhash = matcher.match_file(audfprint_analyze.g2h_analyzer,
                                            hash_tab, qry)
     t_hop = 0.02322
-    print("Matched", qry, "(", dur, "s,", nhash, "hashes)",
-          "as", hash_tab.names[rslts[0][0]],
-          "at", t_hop * float(rslts[0][2]), "with", rslts[0][1],
-          "of", rslts[0][3], "hashes")
+    logger.debug(f"Matched {qry} ({dur} s, {nhash} hashes) as {hash_tab.names[rslts[0][0]]} at {t_hop * float(rslts[0][2])} with {rslts[0][1]} of {rslts[0][3]} hashes")
 
 
 # Run the main function if called from the command line

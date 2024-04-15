@@ -7,7 +7,7 @@ Class to do the analysis of wave files into hash constellations.
 2014-09-20 Dan Ellis dpwe@ee.columbia.edu
 """
 
-from __future__ import division, print_function
+from loguru import logger
 
 import os
 import numpy as np
@@ -287,7 +287,7 @@ class Analyzer(object):
         else:
             # The sgram is identically zero, i.e., the input signal was identically
             # zero.  Not good, but let's let it through for now.
-            print("find_peaks: Warning: input signal is identically zero.")
+            logger.debug("find_peaks: Warning: input signal is identically zero.")
         # High-pass filter onset emphasis
         # [:-1,] discards top bin (nyquist) of sgram so bins fit in 8 bits
         sgram = np.array([scipy.signal.lfilter([1, -1],
@@ -359,9 +359,9 @@ class Analyzer(object):
             except Exception as e:  # audioread.NoBackendError:
                 message = "wavfile2peaks: Error reading " + filename
                 if self.fail_on_error:
-                    print(e)
+                    logger.exception(e)
                     raise IOError(message)
-                print(message, "skipping")
+                logger.debug(message, "skipping")
                 d = []
                 sr = self.target_sr
             # Store duration in a global because it's hard to handle
@@ -569,12 +569,12 @@ def glob2hashtable(pattern, density=20.0):
     totdur = 0.0
     tothashes = 0
     for ix, file_ in enumerate(filelist):
-        print(time.ctime(), "ingesting #", ix, ":", file_, "...")
+        logger.debug(time.ctime(), "ingesting #", ix, ":", file_, "...")
         dur, nhash = g2h_analyzer.ingest(ht, file_)
         totdur += dur
         tothashes += nhash
     elapsedtime = time.clock() - initticks
-    print("Added", tothashes, "(", tothashes / totdur, "hashes/sec) at ",
+    logger.debug("Added", tothashes, "(", tothashes / totdur, "hashes/sec) at ",
           elapsedtime / totdur, "x RT")
     return ht
 

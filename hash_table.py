@@ -7,7 +7,7 @@ used for the audfprint fingerprinter.
 
 2014-05-25 Dan Ellis dpwe@ee.columbia.edu
 """
-from __future__ import division, print_function
+from loguru import logger
 
 import gzip
 import math
@@ -200,9 +200,7 @@ class HashTable(object):
         nhashes = sum(self.counts)
         # Report the proportion of dropped hashes (overfull table)
         dropped = nhashes - sum(np.minimum(self.depth, self.counts))
-        print("Saved fprints for", sum(n is not None for n in self.names),
-              "files (", nhashes, "hashes) to", name,
-              "(%.2f%% dropped)" % (100.0 * dropped / max(1, nhashes)))
+        logger.debug(f"Saved fprints for {sum(n is not None for n in self.names)} files ({nhashes} hashes) to {name} ({100.0 * dropped / max(1, nhashes):.2f}% dropped)")
 
         return name
 
@@ -260,15 +258,13 @@ class HashTable(object):
         elif ext == '.pkl':
             self.load_pkl(name)
         else:
-            print("File type is not specified. Using as HDF")
+            logger.debug("File type is not specified. Loading as HDF")
             self.load_hdf(name)
 
         nhashes = sum(self.counts)
         # Report the proportion of dropped hashes (overfull table)
         dropped = nhashes - sum(np.minimum(self.depth, self.counts))
-        print("Read fprints for", sum(n is not None for n in self.names),
-              "files (", nhashes, "hashes) from", name,
-              "(%.2f%% dropped)" % (100.0 * dropped / max(1, nhashes)))
+        logger.debug(f"Read fprints for {sum(n is not None for n in self.names)} files ({nhashes} hashes) from {name} ({100.0 * dropped / max(1, nhashes):.2f}% dropped)")
 
     def load_hdf(self, name, file_object=None):
         """ Read hash table values from pickle file <name>. """
@@ -325,7 +321,7 @@ class HashTable(object):
             self.maxtimebits = _bitsfor(temp.maxtime)
         if temp.ht_version < HT_COMPAT_VERSION:
             # Need to upgrade the database.
-            print("Loading database version", temp.ht_version,
+            logger.debug("Loading database version", temp.ht_version,
                   "in compatibility mode.")
             # Offset all the nonzero bins with one ID count.
             temp.table += np.array(1 << self.maxtimebits).astype(np.uint32) * (
@@ -456,7 +452,7 @@ class HashTable(object):
         self.names[id_] = None
         self.hashesperid[id_] = 0
         self.dirty = True
-        print("Removed", name, "(", hashes_removed, "hashes).")
+        logger.debug("Removed", name, "(", hashes_removed, "hashes).")
 
     def retrieve(self, name):
         """Return an np.array of (time, hash) pairs found in the table."""
