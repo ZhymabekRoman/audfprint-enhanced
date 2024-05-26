@@ -250,7 +250,10 @@ class HashTable(object):
 
     def load(self, name):
         """ Read either pklz or mat-format hash table file """
+        logger.trace(f"Loading hash table from {name}")
+
         ext = os.path.splitext(name)[1]
+        logger.trace(f"File extension is {ext}")
         if ext == '.mat':
             self.load_matlab(name)
         elif ext == '.hdf':
@@ -258,7 +261,7 @@ class HashTable(object):
         elif ext == '.pkl':
             self.load_pkl(name)
         else:
-            logger.debug("File type is not specified. Loading as HDF")
+            logger.debug("Hash table file type is not specified. Loading as HDF")
             self.load_hdf(name)
 
         nhashes = sum(self.counts)

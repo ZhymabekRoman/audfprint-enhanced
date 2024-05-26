@@ -350,7 +350,7 @@ def main(cmd, dbase, density, hashbits, bucketsize, maxtime, maxtimebits, sample
     if opfile:
         logger.add(opfile)
 
-    logger.level(verbose)
+    logger.level(os.getenv('LOG_LEVEL', verbose))
 
     # Keep track of wall time
     initticks = time_clock()
