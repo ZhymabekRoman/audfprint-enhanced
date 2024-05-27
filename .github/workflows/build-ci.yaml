@@ -35,6 +35,7 @@ jobs:
           script-name: audfprint-gui.py
           onefile: true
           enable-plugins: pyqt5
+          macos-create-app-bundle: true
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
