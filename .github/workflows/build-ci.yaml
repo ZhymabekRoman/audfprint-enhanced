@@ -34,6 +34,7 @@ jobs:
           nuitka-version: main
           script-name: audfprint-gui.py
           onefile: true
+          enable-plugins: pyqt5
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
