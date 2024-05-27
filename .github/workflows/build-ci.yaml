@@ -32,7 +32,7 @@ jobs:
         uses: Nuitka/Nuitka-Action@main
         with:
           nuitka-version: main
-          script-name: audfprint.py
+          script-name: audfprint-gui.py
           onefile: true
 
       - name: Upload Artifacts
